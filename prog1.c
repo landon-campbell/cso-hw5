@@ -54,10 +54,9 @@ processor might skip some array accesses or perform multiple array accesses in p
 
 /* if GCC is used to compile this, disable optimizations (if not already disabled)
    that are likely to make the compiler generate a non-intutive access pattern */
-#pragma GCC optimize (2, "no-tree-vectorize")
 
 /* array of about 1M ints, configured to be placed at an address that's a multiple of 128 */
-int global_array[1048568] __attribute__((aligned(128)));
+int global_array[1048576] __attribute__((aligned(128)));
 
 /*
 This tells GCC or Clang to assume that the array is being modified,
@@ -71,35 +70,27 @@ void prevent_optimizations_based_on_knowing_array_values() {
 }
 
 int main() {
-    const int MAX = 1048568;
-    const int SKIP = 4;
-    const int ITERS = 64000000;
 
-/* these two lines tell Clang (if used to compile this) not to try to 
-   perform optimizations on this loop that are likely to make the access
-   pattern not very intutive */
-#pragma clang loop vectorize(disable)
-#pragma clang loop interleave(disable)
+    const int ten_mil = 10000000; // ten million cache references
 
-    /* This loop sets up global_array[i] for the next loop.
-     * Most of the accesses to the array are likely to happen in the second loop. */
-    for (int i = 0; i < MAX; ++i) {
-        global_array[i] = (i+SKIP) % (MAX);
-    }
+    // Initialize the array to create an access pattern that causes high miss rate in 16KB cache
+    // but low miss rate in 32KB cache
+
+    global_array[0] = 2048; // 0 -> 2048
+    global_array[2048] = 4096; // 2048 -> 4096
+    global_array[4096] = 0; // 4096 -> 0
+
+    // Prevent the compiler from optimizing the array initialization
     prevent_optimizations_based_on_knowing_array_values();
-    int j = 0;
 
-    
-#pragma clang loop vectorize(disable)
-#pragma clang loop interleave(disable)
+    int j = 0; // Start at index 0
 
-    /* This loop performs the actual array accesses described above.
-     * This is where most of the data cache accesses are likely to occur.
-     */
-    for (int i = 0; i < ITERS; ++i) {
-        j = global_array[j];
+    for (int i = 0; i < ten_mil; ++i) { // Loop for ten million iterations
+        j = global_array[j]; // Access the array element
     }
-    /* print out j to ensure that the compiler doesn't optimize the array accesses above away */
-    printf("%d\n", j);
+    
+    printf("%d\n", j); // Print the last accessed element
+    return 0;
+
 }
 
